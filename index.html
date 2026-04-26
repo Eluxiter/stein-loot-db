@@ -345,16 +345,13 @@
 
 <!-- ── Config ─────────────────────────────────────────────────────────── -->
 <script>
-  // ╔═══════════════════════════════════════════════╗
-  // ║  PASTE YOUR SUPABASE DETAILS HERE             ║
-  // ╚═══════════════════════════════════════════════╝
-  const SUPABASE_URL = 'https://kejfsqinqvmvlehqvkyw.supabase.co'; // ← YOUR PROJECT URL
+  const SUPABASE_URL = 'https://kejfsqinqvmvlehqvkyw.supabase.co';
   const SUPABASE_KEY = 'sb_publishable_Cy-P7SGKaBP6EkixHehq8g_f5BBHWzC';
 </script>
 
 <!-- ── Header ─────────────────────────────────────────────────────────── -->
 <header class="site-header">
-  <span style="font-size:22px;">⚔️</span>
+  <span style="font-size:22px;"></span>
   <h1>Stein Loot Database</h1>
   <div class="meta">
     <div id="last-updated">Loading…</div>
@@ -384,14 +381,14 @@
     <p>Each grade reflects the worst-case 95% Wilson confidence interval margin across all drops for that mob.
     A narrow interval means the displayed drop rate is close to the true rate; a wide one means more kills are needed.</p>
     <br>
-    <div class="row"><span class="g" style="color:var(--grade-a);">A</span> &lt; ±2% margin — very reliable (&gt;1000 kills typically)</div>
+    <div class="row"><span class="g" style="color:var(--grade-a);">A</span> &lt; ±2% margin — very reliable (&gt;usually > 1000 kills)</div>
     <div class="row"><span class="g" style="color:var(--grade-b);">B</span> ±2–5% — reliable (300–1000 kills)</div>
     <div class="row"><span class="g" style="color:var(--grade-c);">C</span> ±5–10% — decent (80–300 kills)</div>
     <div class="row"><span class="g" style="color:var(--grade-d);">D</span> ±10–15% — sparse (30–80 kills)</div>
     <div class="row"><span class="g" style="color:var(--grade-f);">F</span> &gt; ±15% — too few kills to trust (&lt;30)</div>
     <br>
     <p style="color:var(--muted);font-size:11px;">
-      ⚠️ Rates may be slightly inflated — kills from other players in render distance can be counted.
+      ⚠️ Rates may be slightly inflated - kills from other players in render distance can accidentally be counted.
       High-confidence grades reduce but don't eliminate this bias.
     </p>
   </div>
@@ -449,9 +446,6 @@
   function pct1(n) { return (n * 100).toFixed(1) + '%'; }
 
   // ── Item categories ────────────────────────────────────────────────────
-  // Order matters — categories appear in this order in the drop table.
-  // Items not listed here appear in an "Uncategorized" section at the end.
-  // Books are matched by prefix ('Book:') rather than being listed individually.
 
   const CATEGORY_ORDER = [
     'Trash',
@@ -526,36 +520,29 @@
       'Alaft','Starry Vere','Claggart','Indomitable','Bellipotent','Dankser',
     ],
     'Rare Items': [
-      'Flame Ridden Helmet','Flame Ridden Chestplate','Flame Ridden Kilt',
-      'Flame Ridden Shoulders','Flame Ridden Gauntlets','Flame Ridden Boots',
-      'Headpiece of Valor','Garment of Valor','Legguards of Valor',
-      'Shoulderplates of Valor','Gauntlets of Valor','Boots of Valor',
-      'Helmet of Supreme Prejudice','Chestplate of Supreme Prejudice',
-      'Legguards of Supreme Prejudice','Shoulders of Supreme Prejudice',
-      'Gloves of Supreme Prejudice','Boots of Supreme Prejudice',
-      'Citadel Headguard','Citadel Chestplate','Citadel Legguards',
-      'Citadel Shoulders','Citadel Gloves','Citadel Warboots',
-      'Tidal Helmet','Tidal Chestplate','Tidal Legplates','Tidal Shoulders',
-      'Tidal Gloves','Tidal Boots','Arcane Helmet','Arcane Chestplate',
-      'Arcane Greaves','Arcane Shoulderblades','Arcane Gloves','Arcane Boots',
-      'Foreguard Headpiece','Foreguard Chestplate','Foreguard Pants',
-      'Foreguard Shoulders','Foreguard Gloves','Foreguard Boots',
+      'Flame Ridden Helmet','Flame Ridden Chestplate','Flame Ridden Kilt','Flame Ridden Shoulders','Flame Ridden Gauntlets','Flame Ridden Boots',
+      'Headpiece of Valor','Garment of Valor','Legguards of Valor','Shoulderplates of Valor','Gauntlets of Valor','Boots of Valor',
+      'Helmet of Supreme Prejudice','Chestplate of Supreme Prejudice','Legguards of Supreme Prejudice','Shoulders of Supreme Prejudice','Gloves of Supreme Prejudice','Boots of Supreme Prejudice',
+      'Citadel Headguard','Citadel Chestplate','Citadel Legguards','Citadel Shoulders','Citadel Gloves','Citadel Warboots',
+      'Tidal Helmet','Tidal Chestplate','Tidal Legplates','Tidal Shoulders','Tidal Gloves','Tidal Boots',
+      'Arcane Helmet','Arcane Chestplate','Arcane Greaves','Arcane Shoulderblades','Arcane Gloves','Arcane Boots',
+      'Foreguard Headpiece','Foreguard Chestplate','Foreguard Pants','Foreguard Shoulders','Foreguard Gloves','Foreguard Boots',
     ],
-    // Books matched by prefix below — no need to list them all here
+    // Books matched by prefix below (easier than listing them all here)
     'Books': [],
   };
 
-  // Build reverse lookup: lowercase item name → category name (O(1) per item)
+  // Build reverse lookup: lowercase item name -> category name (O(1) per item)
   const ITEM_TO_CATEGORY = {};
   for (const [cat, items] of Object.entries(ITEM_CATEGORIES)) {
     for (const item of items) ITEM_TO_CATEGORY[item.toLowerCase()] = cat;
   }
 
   function getCategory(itemName) {
-    // Case-insensitive explicit lookup first
+    // Case-insensitive lookup first
     const explicit = ITEM_TO_CATEGORY[itemName.toLowerCase()];
     if (explicit) return explicit;
-    // Books prefix — but only if it looks like "Book: Name", not "X Book of Y"
+    // Books prefix
     if (/^book:/i.test(itemName)) return 'Books';
     return null; // uncategorized
   }
@@ -564,7 +551,7 @@
    * Produce a flat list of display entries sorted by count descending.
    * Each entry is either:
    *   { type: 'category', name, items, totalCount, ci, note, sortKey }
-   *   { type: 'item',     row,  sortKey }   ← uncategorized items appear inline
+   *   { type: 'item',     row,  sortKey }   <- uncategorized items appear inline
    */
   function buildDisplayEntries(itemRows, kills) {
     const buckets = {};
@@ -674,7 +661,7 @@
   // ── Rendering ──────────────────────────────────────────────────────────
 
   function renderCI(ci) {
-    // Show range as text: "2.1% – 3.4%" — more readable than a bar at small scales
+    // Show range as text: "2.1% – 3.4%"
     if (ci.margin >= 1) return `<span style="color:var(--muted);">—</span>`;
     const lo = (ci.low  * 100).toFixed(1);
     const hi = (ci.high * 100).toFixed(1);
