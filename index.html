@@ -333,6 +333,54 @@
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: var(--bg); }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    /* ── Category rows ────────────────────────────────────── */
+    .cat-header td {
+      background: var(--header) !important;
+      color: var(--text) !important;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      cursor: pointer;
+      user-select: none;
+      padding: 5px 14px !important;
+    }
+
+    .cat-header:hover td { filter: brightness(1.15); }
+
+    .cat-header .cat-chevron {
+      display: inline-block;
+      transition: transform 0.18s;
+      margin-right: 6px;
+      font-size: 9px;
+      opacity: 0.7;
+    }
+
+    .cat-header.cat-open .cat-chevron { transform: rotate(90deg); }
+
+    .cat-header .cat-total-rate {
+      color: var(--text);
+      font-weight: bold;
+    }
+
+    .cat-header .cat-note {
+      font-size: 10px;
+      color: var(--muted);
+      font-weight: normal;
+      text-transform: none;
+      letter-spacing: 0;
+      margin-left: 6px;
+    }
+
+    .cat-item td:first-child {
+      padding-left: 28px !important;
+      color: var(--muted) !important;
+    }
+
+    .cat-item td:first-child::before {
+      content: '└ ';
+      opacity: 0.4;
+    }
   </style>
 </head>
 <body>
@@ -442,7 +490,154 @@
   function pct(n) { return (n * 100).toFixed(2) + '%'; }
   function pct1(n) { return (n * 100).toFixed(1) + '%'; }
 
-  // ── Data aggregation ───────────────────────────────────────────────────
+  // ── Item categories ────────────────────────────────────────────────────
+  // Order matters — categories appear in this order in the drop table.
+  // Items not listed here appear in an "Uncategorized" section at the end.
+  // Books are matched by prefix ('Book:') rather than being listed individually.
+
+  const CATEGORY_ORDER = [
+    'Trash',
+    'Quest Items',
+    'Strong Potions',
+    'Lavekawa Potions',
+    'Common Items',
+    'Uncommon Items',
+    'Rare Items',
+    'Books',
+  ];
+
+  // Optional per-category footnote shown in the header row
+  const CATEGORY_NOTES = {
+    'Common Items': '* duplicate names inflate totals',
+  };
+
+  const ITEM_CATEGORIES = {
+    'Trash': [
+      'Broken Bones','Little Tooth','Old Rope','Broken Axe','Broken Hoe',
+      'Fish Trash','Grass','Old Bucket','Pile of Bones','Simple Stone',
+    ],
+    'Quest Items': [
+      'Diary Page 1','Diary Page 2','Diary Page 3',
+      'First Book of Gudmar','Second Book of Gudmar','Third Book of Gudmar',
+      'First Letter','Second Letter','Third Letter',
+      'Grave Stone','Grave Plate','Tombstone',
+    ],
+    'Strong Potions': [
+      'Strong Healing Potion','Strong Mana Potion','Strong Energy Potion',
+    ],
+    'Lavekawa Potions': [
+      'Lavekawa Healing Potion','Lavekawa Mana Potion','Lavekawa Energy Potion',
+    ],
+    'Common Items': [
+      'Fragile Staff','Shabby Sword','Shabby Axe','Shabby Staff','Shabby Hammer',
+      'Shabby Bow','Fragile Hat','Fragile Chestpiece','Fragile Kilt','Fragile Shoulders',
+      'Fragile Gloves','Fragile Boots','Poor Chestplate','Shabby Feet','Shabby Hat',
+      'Shabby Chest','Shabby Legs','Shabby Shoulders','Shabby Hands',
+    ],
+    'Uncommon Items': [
+      'Short Branch','Suspended Fire','Vindication Cane','Bratan','Favor of Fire Magic',
+      'Paladin Scepter','Putere','Brute Sword','Daybreak','Extremity','Forsaken Sword',
+      'Conduct','Deluded Chopper','Swoosh','Doomblade','Valkyrie','Legacy of Secrecy',
+      'Carver of Hate','Cotton Warden Staff','Betrayer of Death','Zealous Cane',
+      'Voice of the West','Voice of the Oak','War Staff of Mercy','Restored Mallet',
+      'Concussion Hammer','Massive Javelin','Scourge of the Seas','Belleware',
+      'Spirit of the Eskimo','Scourge of the Night','Defiled Darkstaff','Regret',
+      'Voidshard','Graveshard Staff','Rune Forged Staff','Sting','Vowed Oak Striker',
+      "K'vinna",'Bone Straight Bow','Silent Trap','Perfidy',
+      'Conqueror of the Setting Sun','Protector of Blast Protection',
+      'Kilt of Anguishing Heat','Incarnation of Demon Fire','Padded Gauntlets',
+      'Fusion Wool Boots','Ebon Helmet','Ebon Chestplate','Ebon Legplates',
+      'Ebon Shoulders','Ebon Gloves','Ebon Boots','Extinction Hood',
+      'Ancient Chest of the Beast','Breeches of the Night','Chain Shoulderguards',
+      'Grips of Ancient Warlords','Footpads of Justice','Cloth Helm of Relentless Might',
+      'Jerkin of Fortunes','Kilt of the Phoenix','Heirloom of Priests','Gloves of Life',
+      'Hermes Boots','Frostspark Helmet','Water Quilted Chestpiece','Twisted Britches',
+      'Cold Infused Shoulders','Gloves of Imminent Trials','Tyrannical Sprinters',
+      'Ominous Face Mask',"Twilight's Cloth",'Template of Darkness','Ominous Shoulders',
+      'Fear of the Aether','Footsteps of Soul Magic','Ghastly Hood of Visions',
+      'Vest of Silent Glory',"Bandit's Robes of Fortunes",'Shoulders of Piercing',
+      'Rugged Leather Grasps','Sprinters of the Daywalker','Infame Heat',
+      'Dragons Breath','Eruption','Foe of the Fire','Pyromaniacs Greatstaff',
+      'Fireshaper','Scar','Morning Star','Excalibur','Colossus','Citadel Striker',
+      'Strongblade of Valor','Skeletal Ravager','Suffering','Desperation','Night Break',
+      'Outlawed Reaver','Nirvana Bringer','Holy Hail','Pillar of light','Lightstorm',
+      'Holy Cyclone','Brilliance','Dreamcaller','Bonesnapper','Ghastly Bludgeon',
+      'Wavebringer',"Poseidon's Call",'Totem of the Sea','Dripmight Book','Templace',
+      'Infusion','Ghostshard','Enchanted Rage','Hateful Scepter','Furious Void',
+      'Alaft','Starry Vere','Claggart','Indomitable','Bellipotent','Dankser',
+    ],
+    'Rare Items': [
+      'Flame Ridden Helmet','Flame Ridden Chestplate','Flame Ridden Kilt',
+      'Flame Ridden Shoulders','Flame Ridden Gauntlets','Flame Ridden Boots',
+      'Headpiece of Valor','Garment of Valor','Legguards of Valor',
+      'Shoulderplates of Valor','Gauntlets of Valor','Boots of Valor',
+      'Helmet of Supreme Prejudice','Chestplate of Supreme Prejudice',
+      'Legguards of Supreme Prejudice','Shoulders of Supreme Prejudice',
+      'Gloves of Supreme Prejudice','Boots of Supreme Prejudice',
+      'Citadel Headguard','Citadel Chestplate','Citadel Legguards',
+      'Citadel Shoulders','Citadel Gloves','Citadel Warboots',
+      'Tidal Helmet','Tidal Chestplate','Tidal Legplates','Tidal Shoulders',
+      'Tidal Gloves','Tidal Boots','Arcane Helmet','Arcane Chestplate',
+      'Arcane Greaves','Arcane Shoulderblades','Arcane Gloves','Arcane Boots',
+      'Foreguard Headpiece','Foreguard Chestplate','Foreguard Pants',
+      'Foreguard Shoulders','Foreguard Gloves','Foreguard Boots',
+    ],
+    // Books matched by prefix below — no need to list them all here
+    'Books': [],
+  };
+
+  // Build reverse lookup: item name → category name (O(1) per item)
+  const ITEM_TO_CATEGORY = {};
+  for (const [cat, items] of Object.entries(ITEM_CATEGORIES)) {
+    for (const item of items) ITEM_TO_CATEGORY[item] = cat;
+  }
+
+  function getCategory(itemName) {
+    if (ITEM_TO_CATEGORY[itemName]) return ITEM_TO_CATEGORY[itemName];
+    if (itemName.startsWith('Book:') || itemName.startsWith('Book: ')) return 'Books';
+    return 'Uncategorized';
+  }
+
+  /**
+   * Group item rows into ordered category buckets.
+   * Returns [{ name, items, totalCount, ci, note }]
+   * with categories in CATEGORY_ORDER, then Uncategorized at the end.
+   */
+  function groupByCategory(itemRows, kills) {
+    const buckets = {};
+    for (const row of itemRows) {
+      const cat = getCategory(row.name);
+      if (!buckets[cat]) buckets[cat] = [];
+      buckets[cat].push(row);
+    }
+
+    const result = [];
+    const seen   = new Set();
+
+    // Categories in defined order (only if they have items for this mob)
+    for (const cat of CATEGORY_ORDER) {
+      if (!buckets[cat] || buckets[cat].length === 0) continue;
+      seen.add(cat);
+      const items      = buckets[cat].sort((a, b) => b.count - a.count);
+      const totalCount = items.reduce((s, r) => s + r.count, 0);
+      result.push({
+        name:  cat,
+        items,
+        totalCount,
+        ci:    wilsonCI(totalCount, kills),
+        note:  CATEGORY_NOTES[cat] || null,
+      });
+    }
+
+    // Uncategorized last
+    if (buckets['Uncategorized'] && buckets['Uncategorized'].length > 0) {
+      const items      = buckets['Uncategorized'].sort((a, b) => b.count - a.count);
+      const totalCount = items.reduce((s, r) => s + r.count, 0);
+      result.push({ name: 'Uncategorized', items, totalCount, ci: wilsonCI(totalCount, kills), note: null });
+    }
+
+    return result;
+  }
 
   function aggregate(sessions, drops) {
     // Build session lookup and mob buckets
@@ -527,15 +722,50 @@
     const { grade } = mob;
     const killsK = mob.kills >= 1000 ? (mob.kills / 1000).toFixed(1) + 'k' : mob.kills;
 
-    const itemRowsHTML = mob.itemRows.map((row, i) => {
-      const bg = i % 2 === 0 ? 'var(--row-even)' : 'var(--row-odd)';
-      return `<tr style="background:${bg};">
-        <td>${esc(row.name)}</td>
-        <td>${row.count}</td>
-        <td class="rate">${pct(row.ci.mid)}</td>
-        <td>${renderCI(row.ci)}</td>
-        <td>${mob.hours > 0.01 ? Math.round(row.count / mob.hours) : '—'}</td>
-      </tr>`;
+    // Group items into categories
+    const groups = groupByCategory(mob.itemRows, mob.kills);
+
+    // Build table body: one collapsible group per category
+    let rowIndex = 0; // for alternating row colours on individual items
+    const tbodyHTML = groups.map((group, gi) => {
+      const catSlug    = `cat-${gi}-${mob.name.replace(/\W/g, '')}`;
+      const totalLabel = mob.kills > 0
+        ? `<span class="cat-total-rate">${pct(group.ci.mid)}</span> total`
+        : '—';
+      const noteHtml = group.note
+        ? `<span class="cat-note">${esc(group.note)}</span>`
+        : '';
+      const perHr = mob.hours > 0.01
+        ? Math.round(group.totalCount / mob.hours)
+        : null;
+
+      const headerRow = `
+        <tr class="cat-header" data-slug="${catSlug}">
+          <td>
+            <span class="cat-chevron">▶</span>
+            ${esc(group.name)}
+            <span style="color:var(--muted);font-weight:normal;margin-left:6px;font-size:10px;">(${group.items.length} item${group.items.length !== 1 ? 's' : ''})</span>
+            ${noteHtml}
+          </td>
+          <td>${group.totalCount}</td>
+          <td>${totalLabel}</td>
+          <td>${renderCI(group.ci)}</td>
+          <td>${perHr ?? '—'}</td>
+        </tr>`;
+
+      const itemRows = group.items.map(row => {
+        const bg = rowIndex++ % 2 === 0 ? 'var(--row-even)' : 'var(--row-odd)';
+        const ph = mob.hours > 0.01 ? Math.round(row.count / mob.hours) : null;
+        return `<tr class="cat-item ${catSlug}" style="display:none;background:${bg};">
+          <td>${esc(row.name)}</td>
+          <td>${row.count}</td>
+          <td class="rate">${pct(row.ci.mid)}</td>
+          <td>${renderCI(row.ci)}</td>
+          <td>${ph ?? '—'}</td>
+        </tr>`;
+      }).join('');
+
+      return headerRow + itemRows;
     }).join('');
 
     const goldSection = mob.gold > 0 ? `
@@ -563,25 +793,26 @@
           <span class="chevron">▶</span>
         </div>
         <div class="mob-detail">
-          ${mob.itemRows.length > 0 ? `
+          ${groups.length > 0 ? `
           <table>
             <thead>
               <tr>
-                <th style="text-align:left;">Item</th>
+                <th style="text-align:left;">Item / Category</th>
                 <th>Count</th>
                 <th>Drop rate</th>
                 <th>95% CI</th>
                 <th>Per hour</th>
               </tr>
             </thead>
-            <tbody>${itemRowsHTML}</tbody>
+            <tbody>${tbodyHTML}</tbody>
           </table>` : `<div style="padding:16px;color:var(--muted);text-align:center;font-size:12px;">No drop data recorded yet.</div>`}
           ${goldSection}
           <div class="sessions-note">
-            Based on <strong>${mob.sessions}</strong> session${mob.sessions !== 1 ? 's' : ''} · 
-            <strong>${mob.kills}</strong> total kills · 
-            95% Wilson confidence intervals · 
-            Rates may be slightly inflated due to undetected out-of-range kills
+            Based on <strong>${mob.sessions}</strong> session${mob.sessions !== 1 ? 's' : ''} ·
+            <strong>${mob.kills}</strong> total kills ·
+            95% Wilson confidence intervals ·
+            Rates may be slightly inflated due to undetected out-of-range kills ·
+            Click a category row to expand individual items
           </div>
         </div>
       </div>`;
@@ -629,13 +860,44 @@
     } else {
       list.innerHTML = visible.map(renderMobCard).join('');
       attachCardListeners();
+
+      // If searching for an item, auto-open the mob card and expand the
+      // category that contains a matching item
+      if (query) {
+        document.querySelectorAll('.mob-card').forEach(card => {
+          card.classList.add('open');
+        });
+        document.querySelectorAll('.cat-header').forEach(header => {
+          const slug  = header.dataset.slug;
+          const items = document.querySelectorAll(`.${slug}`);
+          // Check if any item in this category matches the query
+          const hasMatch = [...items].some(row =>
+            row.querySelector('td')?.textContent.toLowerCase().includes(query)
+          );
+          if (hasMatch) {
+            header.classList.add('cat-open');
+            items.forEach(row => { row.style.display = ''; });
+          }
+        });
+      }
     }
   }
 
   function attachCardListeners() {
+    // Mob card expand/collapse
     document.querySelectorAll('.mob-card').forEach(card => {
       card.querySelector('.mob-header').addEventListener('click', () => {
         card.classList.toggle('open');
+      });
+    });
+
+    // Category row expand/collapse
+    document.querySelectorAll('.cat-header').forEach(header => {
+      header.addEventListener('click', () => {
+        const slug  = header.dataset.slug;
+        const items = document.querySelectorAll(`.${slug}`);
+        const isOpen = header.classList.toggle('cat-open');
+        items.forEach(row => { row.style.display = isOpen ? '' : 'none'; });
       });
     });
   }
