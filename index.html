@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stein Loot Database</title>
+  <style>
+    /* ── Reset & base ─────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #1a1a2e;
+      --panel:     #16213e;
+      --header:    #0f3460;
+      --accent:    #e94560;
+      --green:     #0f9b58;
+      --text:      #e0e0e0;
+      --muted:     #7a7a99;
+      --border:    #2a2a4a;
+      --row-even:  #1e1e3a;
+      --row-odd:   #222244;
+      --gold:      #f5c842;
+      --grade-a:   #0f9b58;
+      --grade-b:   #7ac47a;
+      --grade-c:   #f5c842;
+      --grade-d:   #e97645;
+      --grade-f:   #e94560;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Courier New", monospace;
+      font-size: 14px;
+      min-height: 100vh;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    /* ── Layout ───────────────────────────────────────────── */
+    .site-header {
+      background: var(--header);
+      padding: 18px 32px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      border-bottom: 2px solid var(--accent);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .site-header h1 {
+      font-size: 20px;
+      font-weight: bold;
+      flex: 1;
+      letter-spacing: 0.05em;
+    }
+
+    .site-header .meta {
+      font-size: 11px;
+      color: var(--muted);
+      text-align: right;
+      line-height: 1.6;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 24px 20px;
+    }
+
+    /* ── Search + filter bar ──────────────────────────────── */
+    .toolbar {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .toolbar input {
+      flex: 1;
+      min-width: 200px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13px;
+      padding: 8px 12px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .toolbar input:focus { border-color: var(--accent); }
+    .toolbar input::placeholder { color: var(--muted); }
+
+    .toolbar .sort-label {
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .toolbar select {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 12px;
+      padding: 8px 10px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    /* ── Status messages ──────────────────────────────────── */
+    #status {
+      text-align: center;
+      padding: 40px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    #status.error { color: var(--accent); }
+
+    /* ── Mob cards ────────────────────────────────────────── */
+    .mob-list { display: flex; flex-direction: column; gap: 10px; }
+
+    .mob-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      transition: border-color 0.15s;
+    }
+
+    .mob-card:hover { border-color: #3a3a6a; }
+    .mob-card.open  { border-color: var(--accent); }
+
+    .mob-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .mob-header:hover { background: rgba(255,255,255,0.03); }
+
+    .mob-name {
+      font-size: 15px;
+      font-weight: bold;
+      flex: 1;
+    }
+
+    .mob-stats {
+      display: flex;
+      gap: 16px;
+      font-size: 12px;
+      color: var(--muted);
+      flex-wrap: wrap;
+    }
+
+    .mob-stats span { white-space: nowrap; }
+    .mob-stats .val { color: var(--text); }
+
+    .grade-badge {
+      width: 30px;
+      height: 30px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 15px;
+      flex-shrink: 0;
+    }
+
+    .chevron {
+      color: var(--muted);
+      font-size: 12px;
+      transition: transform 0.2s;
+      flex-shrink: 0;
+    }
+
+    .mob-card.open .chevron { transform: rotate(90deg); }
+
+    /* ── Drop table ───────────────────────────────────────── */
+    .mob-detail {
+      display: none;
+      border-top: 1px solid var(--border);
+    }
+
+    .mob-card.open .mob-detail { display: block; }
+
+    .mob-detail table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .mob-detail thead tr {
+      background: var(--header);
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .mob-detail th {
+      padding: 7px 14px;
+      font-weight: normal;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .mob-detail th:first-child { text-align: left; }
+
+    .mob-detail tbody tr:nth-child(even) { background: var(--row-even); }
+    .mob-detail tbody tr:nth-child(odd)  { background: var(--row-odd);  }
+    .mob-detail tbody tr:hover           { background: rgba(255,255,255,0.04); }
+
+    .mob-detail td {
+      padding: 6px 14px;
+      text-align: center;
+      color: var(--muted);
+    }
+
+    .mob-detail td:first-child { text-align: left; color: var(--text); }
+    .mob-detail td.rate        { color: var(--text); font-weight: bold; }
+
+    /* Confidence interval bar */
+    .ci-bar-wrap {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      justify-content: center;
+    }
+
+    .ci-bar-track {
+      width: 80px;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      position: relative;
+      flex-shrink: 0;
+    }
+
+    .ci-bar-fill {
+      position: absolute;
+      top: 0;
+      height: 100%;
+      background: var(--accent);
+      border-radius: 3px;
+      opacity: 0.7;
+    }
+
+    .ci-bar-centre {
+      position: absolute;
+      top: -2px;
+      width: 3px;
+      height: 10px;
+      background: var(--text);
+      border-radius: 1px;
+      transform: translateX(-50%);
+    }
+
+    .ci-label {
+      font-size: 11px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    /* Gold row at bottom of detail */
+    .gold-row {
+      padding: 8px 14px;
+      font-size: 12px;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 20px;
+    }
+
+    .gold-row .gval { color: var(--gold); }
+
+    /* Sessions footnote */
+    .sessions-note {
+      padding: 8px 14px;
+      font-size: 10px;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      line-height: 1.5;
+    }
+
+    /* ── Grade explanation ────────────────────────────────── */
+    .grade-legend {
+      margin-top: 32px;
+      padding: 16px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.8;
+    }
+
+    .grade-legend h3 {
+      color: var(--text);
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+
+    .grade-legend .row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .grade-legend .g { font-weight: bold; font-size: 14px; width: 16px; }
+
+    /* ── Empty / no results ───────────────────────────────── */
+    .no-results {
+      text-align: center;
+      padding: 40px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    /* ── Scrollbar ────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg); }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  </style>
+</head>
+<body>
+
+<!-- ── Config ─────────────────────────────────────────────────────────── -->
+<script>
+  // ╔═══════════════════════════════════════════════╗
+  // ║  PASTE YOUR SUPABASE DETAILS HERE             ║
+  // ╚═══════════════════════════════════════════════╝
+  const SUPABASE_URL = 'https://your-project.supabase.co'; // ← YOUR PROJECT URL
+  const SUPABASE_KEY = 'your-anon-key-here';               // ← YOUR ANON KEY
+</script>
+
+<!-- ── Header ─────────────────────────────────────────────────────────── -->
+<header class="site-header">
+  <span style="font-size:22px;">⚔️</span>
+  <h1>Stein Loot Database</h1>
+  <div class="meta">
+    <div id="last-updated">Loading…</div>
+    <div id="summary-stats"></div>
+  </div>
+</header>
+
+<!-- ── Main ───────────────────────────────────────────────────────────── -->
+<main class="container">
+
+  <div class="toolbar">
+    <input id="search" type="text" placeholder="Search mobs or items…" autocomplete="off">
+    <span class="sort-label">Sort by:</span>
+    <select id="sort-select">
+      <option value="kills">Total kills</option>
+      <option value="sessions">Sessions</option>
+      <option value="name">Mob name</option>
+      <option value="grade">Confidence</option>
+    </select>
+  </div>
+
+  <div id="status">Loading data…</div>
+  <div id="mob-list" class="mob-list" style="display:none;"></div>
+
+  <div class="grade-legend">
+    <h3>Confidence grades</h3>
+    <p>Each grade reflects the worst-case 95% Wilson confidence interval margin across all drops for that mob.
+    A narrow interval means the displayed drop rate is close to the true rate; a wide one means more kills are needed.</p>
+    <br>
+    <div class="row"><span class="g" style="color:var(--grade-a);">A</span> &lt; ±2% margin — very reliable (&gt;1000 kills typically)</div>
+    <div class="row"><span class="g" style="color:var(--grade-b);">B</span> ±2–5% — reliable (300–1000 kills)</div>
+    <div class="row"><span class="g" style="color:var(--grade-c);">C</span> ±5–10% — decent (80–300 kills)</div>
+    <div class="row"><span class="g" style="color:var(--grade-d);">D</span> ±10–15% — sparse (30–80 kills)</div>
+    <div class="row"><span class="g" style="color:var(--grade-f);">F</span> &gt; ±15% — too few kills to trust (&lt;30)</div>
+    <br>
+    <p style="color:var(--muted);font-size:11px;">
+      ⚠️ Rates may be slightly inflated — kills from other players in render distance can be counted.
+      High-confidence grades reduce but don't eliminate this bias.
+    </p>
+  </div>
+
+</main>
+
+<!-- ── Logic ───────────────────────────────────────────────────────────── -->
+<script>
+(function () {
+  'use strict';
+
+  // ── Supabase fetch helpers ─────────────────────────────────────────────
+
+  async function sbFetch(path) {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
+      headers: {
+        'apikey':        SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+      },
+    });
+    if (!res.ok) throw new Error(`Supabase ${path}: ${res.status}`);
+    return res.json();
+  }
+
+  // ── Statistics ─────────────────────────────────────────────────────────
+
+  /**
+   * Wilson score confidence interval for a proportion.
+   * Returns { low, mid, high, margin } all in [0,1].
+   */
+  function wilsonCI(successes, total, z = 1.96) {
+    if (total === 0) return { low: 0, mid: 0, high: 0, margin: 1 };
+    const p   = successes / total;
+    const z2  = z * z;
+    const denom = 1 + z2 / total;
+    const centre = (p + z2 / (2 * total)) / denom;
+    const margin = (z * Math.sqrt(p * (1 - p) / total + z2 / (4 * total * total))) / denom;
+    return {
+      low:    Math.max(0, centre - margin),
+      mid:    centre,
+      high:   Math.min(1, centre + margin),
+      margin,
+    };
+  }
+
+  function confidenceGrade(worstMargin) {
+    if (worstMargin > 0.15) return { grade: 'F', color: 'var(--grade-f)' };
+    if (worstMargin > 0.10) return { grade: 'D', color: 'var(--grade-d)' };
+    if (worstMargin > 0.05) return { grade: 'C', color: 'var(--grade-c)' };
+    if (worstMargin > 0.02) return { grade: 'B', color: 'var(--grade-b)' };
+    return                        { grade: 'A', color: 'var(--grade-a)' };
+  }
+
+  function pct(n) { return (n * 100).toFixed(2) + '%'; }
+  function pct1(n) { return (n * 100).toFixed(1) + '%'; }
+
+  // ── Data aggregation ───────────────────────────────────────────────────
+
+  function aggregate(sessions, drops) {
+    // Build session lookup and mob buckets
+    const sessionMap = {};
+    const mobs       = {};
+
+    for (const s of sessions) {
+      sessionMap[s.id] = s;
+      if (!mobs[s.mob_name]) {
+        mobs[s.mob_name] = {
+          name:     s.mob_name,
+          kills:    0,
+          gold:     0,
+          durationSec: 0,
+          sessions: 0,
+          items:    {},   // { itemName: totalDropCount }
+        };
+      }
+      const m = mobs[s.mob_name];
+      m.kills       += s.kills;
+      m.gold        += s.gold || 0;
+      m.durationSec += s.duration_sec || 0;
+      m.sessions++;
+    }
+
+    // Attach drops
+    for (const d of drops) {
+      const s = sessionMap[d.session_id];
+      if (!s) continue;
+      const m = mobs[s.mob_name];
+      if (!m) continue;
+      m.items[d.item_name] = (m.items[d.item_name] || 0) + d.count;
+    }
+
+    // Compute per-mob statistics
+    return Object.values(mobs).map(m => {
+      const hours = m.durationSec / 3600;
+
+      // Build item rows with Wilson CI
+      const itemRows = Object.entries(m.items)
+        .map(([name, count]) => {
+          const ci = wilsonCI(count, m.kills);
+          return { name, count, ci };
+        })
+        .sort((a, b) => b.count - a.count);
+
+      // Worst-case margin = the rarest item's margin (usually highest uncertainty)
+      const worstMargin = itemRows.length > 0
+        ? Math.max(...itemRows.map(r => r.ci.margin))
+        : 1;
+
+      return {
+        ...m,
+        hours,
+        itemRows,
+        worstMargin,
+        grade: confidenceGrade(worstMargin),
+        goldPerKill: m.kills > 0 ? (m.gold / m.kills).toFixed(1) : null,
+        goldPerHour: hours > 0.01 ? Math.round(m.gold / hours) : null,
+      };
+    });
+  }
+
+  // ── Rendering ──────────────────────────────────────────────────────────
+
+  function renderCI(ci) {
+    // Visual bar from 0–100% width representing the CI range
+    const leftPct   = (ci.low  * 100).toFixed(1);
+    const widthPct  = ((ci.high - ci.low) * 100).toFixed(1);
+    const centrePct = (ci.mid  * 100).toFixed(1);
+    return `
+      <div class="ci-bar-wrap">
+        <div class="ci-bar-track">
+          <div class="ci-bar-fill"  style="left:${leftPct}%;width:${widthPct}%;"></div>
+          <div class="ci-bar-centre" style="left:${centrePct}%;"></div>
+        </div>
+        <span class="ci-label">±${pct1(ci.margin)}</span>
+      </div>`;
+  }
+
+  function renderMobCard(mob) {
+    const { grade } = mob;
+    const killsK = mob.kills >= 1000 ? (mob.kills / 1000).toFixed(1) + 'k' : mob.kills;
+
+    const itemRowsHTML = mob.itemRows.map((row, i) => {
+      const bg = i % 2 === 0 ? 'var(--row-even)' : 'var(--row-odd)';
+      return `<tr style="background:${bg};">
+        <td>${esc(row.name)}</td>
+        <td>${row.count}</td>
+        <td class="rate">${pct(row.ci.mid)}</td>
+        <td>${renderCI(row.ci)}</td>
+        <td>${mob.hours > 0.01 ? Math.round(row.count / mob.hours) : '—'}</td>
+      </tr>`;
+    }).join('');
+
+    const goldSection = mob.gold > 0 ? `
+      <div class="gold-row">
+        <span>💰 Total gold: <span class="gval">${mob.gold.toLocaleString()}</span></span>
+        ${mob.goldPerKill ? `<span>Per kill: <span class="gval">${mob.goldPerKill}</span></span>` : ''}
+        ${mob.goldPerHour ? `<span>Per hour: <span class="gval">${Math.round(mob.goldPerHour).toLocaleString()}</span></span>` : ''}
+      </div>` : '';
+
+    const hrs = mob.durationSec > 0
+      ? `${Math.floor(mob.durationSec / 3600)}h ${Math.floor((mob.durationSec % 3600) / 60)}m`
+      : '—';
+
+    return `
+      <div class="mob-card" data-mob="${esc(mob.name)}">
+        <div class="mob-header">
+          <div class="grade-badge" style="background:${grade.color}22;color:${grade.color};border:1px solid ${grade.color}44;">${grade.grade}</div>
+          <div class="mob-name">${esc(mob.name)}</div>
+          <div class="mob-stats">
+            <span>☠️ <span class="val">${killsK}</span> kills</span>
+            <span>📋 <span class="val">${mob.sessions}</span> sessions</span>
+            <span>📦 <span class="val">${mob.itemRows.length}</span> drops</span>
+            <span>⏱ <span class="val">${hrs}</span></span>
+          </div>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="mob-detail">
+          ${mob.itemRows.length > 0 ? `
+          <table>
+            <thead>
+              <tr>
+                <th style="text-align:left;">Item</th>
+                <th>Count</th>
+                <th>Drop rate</th>
+                <th>95% CI</th>
+                <th>Per hour</th>
+              </tr>
+            </thead>
+            <tbody>${itemRowsHTML}</tbody>
+          </table>` : `<div style="padding:16px;color:var(--muted);text-align:center;font-size:12px;">No drop data recorded yet.</div>`}
+          ${goldSection}
+          <div class="sessions-note">
+            Based on <strong>${mob.sessions}</strong> session${mob.sessions !== 1 ? 's' : ''} · 
+            <strong>${mob.kills}</strong> total kills · 
+            95% Wilson confidence intervals · 
+            Rates may be slightly inflated due to undetected out-of-range kills
+          </div>
+        </div>
+      </div>`;
+  }
+
+  function esc(s) {
+    return String(s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Sort + filter ──────────────────────────────────────────────────────
+
+  let allMobs = [];
+  const searchEl = document.getElementById('search');
+  const sortEl   = document.getElementById('sort-select');
+
+  function applyFilterSort() {
+    const query = searchEl.value.toLowerCase().trim();
+    const sort  = sortEl.value;
+
+    let visible = allMobs;
+
+    if (query) {
+      visible = allMobs.filter(m => {
+        if (m.name.toLowerCase().includes(query)) return true;
+        return m.itemRows.some(r => r.name.toLowerCase().includes(query));
+      });
+    }
+
+    visible = [...visible].sort((a, b) => {
+      if (sort === 'kills')    return b.kills    - a.kills;
+      if (sort === 'sessions') return b.sessions - a.sessions;
+      if (sort === 'name')     return a.name.localeCompare(b.name);
+      if (sort === 'grade') {
+        const order = { A: 0, B: 1, C: 2, D: 3, F: 4 };
+        return order[a.grade.grade] - order[b.grade.grade];
+      }
+      return 0;
+    });
+
+    const list = document.getElementById('mob-list');
+    if (visible.length === 0) {
+      list.innerHTML = `<div class="no-results">No mobs match "${esc(query)}".</div>`;
+    } else {
+      list.innerHTML = visible.map(renderMobCard).join('');
+      attachCardListeners();
+    }
+  }
+
+  function attachCardListeners() {
+    document.querySelectorAll('.mob-card').forEach(card => {
+      card.querySelector('.mob-header').addEventListener('click', () => {
+        card.classList.toggle('open');
+      });
+    });
+  }
+
+  searchEl.addEventListener('input',  applyFilterSort);
+  sortEl.addEventListener('change',   applyFilterSort);
+
+  // ── Bootstrap ─────────────────────────────────────────────────────────
+
+  async function load() {
+    const statusEl = document.getElementById('status');
+    const listEl   = document.getElementById('mob-list');
+
+    try {
+      statusEl.textContent = 'Fetching sessions…';
+      const [sessions, drops] = await Promise.all([
+        sbFetch('sessions?select=*'),
+        sbFetch('drops?select=*'),
+      ]);
+
+      allMobs = aggregate(sessions, drops);
+
+      // Header meta
+      const totalKills    = allMobs.reduce((s, m) => s + m.kills, 0);
+      const totalSessions = allMobs.reduce((s, m) => s + m.sessions, 0);
+      const newest = sessions.reduce((a, b) =>
+        a.submitted_at > b.submitted_at ? a : b, sessions[0]);
+
+      document.getElementById('last-updated').textContent =
+        newest ? `Last updated: ${new Date(newest.submitted_at).toLocaleString()}` : '';
+      document.getElementById('summary-stats').textContent =
+        `${allMobs.length} mobs · ${totalKills.toLocaleString()} kills · ${totalSessions} sessions`;
+
+      statusEl.style.display = 'none';
+      listEl.style.display   = 'flex';
+      applyFilterSort();
+
+    } catch (err) {
+      console.error(err);
+      statusEl.className   = 'error';
+      statusEl.textContent = `Failed to load data: ${err.message}`;
+    }
+  }
+
+  load();
+
+})();
+</script>
+
+</body>
+</html>
