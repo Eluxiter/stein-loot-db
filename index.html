@@ -232,48 +232,6 @@
     .mob-detail td:first-child { text-align: left; color: var(--text); }
     .mob-detail td.rate        { color: var(--text); font-weight: bold; }
 
-    /* Confidence interval bar */
-    .ci-bar-wrap {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      justify-content: center;
-    }
-
-    .ci-bar-track {
-      width: 80px;
-      height: 6px;
-      background: var(--border);
-      border-radius: 3px;
-      position: relative;
-      flex-shrink: 0;
-    }
-
-    .ci-bar-fill {
-      position: absolute;
-      top: 0;
-      height: 100%;
-      background: var(--accent);
-      border-radius: 3px;
-      opacity: 0.7;
-    }
-
-    .ci-bar-centre {
-      position: absolute;
-      top: -2px;
-      width: 3px;
-      height: 10px;
-      background: var(--text);
-      border-radius: 1px;
-      transform: translateX(-50%);
-    }
-
-    .ci-label {
-      font-size: 11px;
-      color: var(--muted);
-      white-space: nowrap;
-    }
-
     /* Gold row at bottom of detail */
     .gold-row {
       padding: 8px 14px;
@@ -519,6 +477,7 @@
     'Quest Items': [
       'Diary Page 1','Diary Page 2','Diary Page 3',
       'First Book of Gudmar','Second Book of Gudmar','Third Book of Gudmar',
+      'First book of Gudmar','Second book of Gudmar','Third book of Gudmar',
       'First Letter','Second Letter','Third Letter',
       'Grave Stone','Grave Plate','Tombstone',
     ],
@@ -586,57 +545,68 @@
     'Books': [],
   };
 
-  // Build reverse lookup: item name → category name (O(1) per item)
+  // Build reverse lookup: lowercase item name → category name (O(1) per item)
   const ITEM_TO_CATEGORY = {};
   for (const [cat, items] of Object.entries(ITEM_CATEGORIES)) {
-    for (const item of items) ITEM_TO_CATEGORY[item] = cat;
+    for (const item of items) ITEM_TO_CATEGORY[item.toLowerCase()] = cat;
   }
 
   function getCategory(itemName) {
-    if (ITEM_TO_CATEGORY[itemName]) return ITEM_TO_CATEGORY[itemName];
-    if (itemName.startsWith('Book:') || itemName.startsWith('Book: ')) return 'Books';
-    return 'Uncategorized';
+    // Case-insensitive explicit lookup first
+    const explicit = ITEM_TO_CATEGORY[itemName.toLowerCase()];
+    if (explicit) return explicit;
+    // Books prefix — but only if it looks like "Book: Name", not "X Book of Y"
+    if (/^book:/i.test(itemName)) return 'Books';
+    return null; // uncategorized
   }
 
   /**
-   * Group item rows into ordered category buckets.
-   * Returns [{ name, items, totalCount, ci, note }]
-   * with categories in CATEGORY_ORDER, then Uncategorized at the end.
+   * Produce a flat list of display entries sorted by count descending.
+   * Each entry is either:
+   *   { type: 'category', name, items, totalCount, ci, note, sortKey }
+   *   { type: 'item',     row,  sortKey }   ← uncategorized items appear inline
    */
-  function groupByCategory(itemRows, kills) {
+  function buildDisplayEntries(itemRows, kills) {
     const buckets = {};
+    const uncategorized = [];
+
     for (const row of itemRows) {
       const cat = getCategory(row.name);
-      if (!buckets[cat]) buckets[cat] = [];
-      buckets[cat].push(row);
+      if (cat === null) {
+        uncategorized.push(row);
+      } else {
+        if (!buckets[cat]) buckets[cat] = [];
+        buckets[cat].push(row);
+      }
     }
 
-    const result = [];
-    const seen   = new Set();
+    const entries = [];
 
-    // Categories in defined order (only if they have items for this mob)
+    // Category entries
     for (const cat of CATEGORY_ORDER) {
       if (!buckets[cat] || buckets[cat].length === 0) continue;
-      seen.add(cat);
-      const items      = buckets[cat].sort((a, b) => b.count - a.count);
+      const items      = buckets[cat].slice().sort((a, b) => b.count - a.count);
       const totalCount = items.reduce((s, r) => s + r.count, 0);
-      result.push({
-        name:  cat,
+      entries.push({
+        type:       'category',
+        name:       cat,
         items,
         totalCount,
-        ci:    wilsonCI(totalCount, kills),
-        note:  CATEGORY_NOTES[cat] || null,
+        ci:         wilsonCI(totalCount, kills),
+        note:       CATEGORY_NOTES[cat] || null,
+        sortKey:    totalCount,
       });
     }
 
-    // Uncategorized last
-    if (buckets['Uncategorized'] && buckets['Uncategorized'].length > 0) {
-      const items      = buckets['Uncategorized'].sort((a, b) => b.count - a.count);
-      const totalCount = items.reduce((s, r) => s + r.count, 0);
-      result.push({ name: 'Uncategorized', items, totalCount, ci: wilsonCI(totalCount, kills), note: null });
+    // Uncategorized items appear as individual rows
+    for (const row of uncategorized) {
+      entries.push({ type: 'item', row, sortKey: row.count });
     }
 
-    return result;
+    // Sort everything together by count descending
+    entries.sort((a, b) => b.sortKey - a.sortKey);
+
+    return entries;
   }
 
   function aggregate(sessions, drops) {
@@ -704,69 +674,122 @@
   // ── Rendering ──────────────────────────────────────────────────────────
 
   function renderCI(ci) {
-    // Visual bar from 0–100% width representing the CI range
-    const leftPct   = (ci.low  * 100).toFixed(1);
-    const widthPct  = ((ci.high - ci.low) * 100).toFixed(1);
-    const centrePct = (ci.mid  * 100).toFixed(1);
-    return `
-      <div class="ci-bar-wrap">
-        <div class="ci-bar-track">
-          <div class="ci-bar-fill"  style="left:${leftPct}%;width:${widthPct}%;"></div>
-          <div class="ci-bar-centre" style="left:${centrePct}%;"></div>
-        </div>
-        <span class="ci-label">±${pct1(ci.margin)}</span>
-      </div>`;
+    // Show range as text: "2.1% – 3.4%" — more readable than a bar at small scales
+    if (ci.margin >= 1) return `<span style="color:var(--muted);">—</span>`;
+    const lo = (ci.low  * 100).toFixed(1);
+    const hi = (ci.high * 100).toFixed(1);
+    return `<span style="color:var(--muted);white-space:nowrap;font-size:11px;">${lo}% – ${hi}%</span>`;
   }
 
   function renderMobCard(mob) {
     const { grade } = mob;
     const killsK = mob.kills >= 1000 ? (mob.kills / 1000).toFixed(1) + 'k' : mob.kills;
 
-    // Group items into categories
-    const groups = groupByCategory(mob.itemRows, mob.kills);
+    const entries = buildDisplayEntries(mob.itemRows, mob.kills);
 
-    // Build table body: one collapsible group per category
-    let rowIndex = 0; // for alternating row colours on individual items
-    const tbodyHTML = groups.map((group, gi) => {
-      const catSlug    = `cat-${gi}-${mob.name.replace(/\W/g, '')}`;
-      const totalLabel = mob.kills > 0
-        ? `<span class="cat-total-rate">${pct(group.ci.mid)}</span> total`
-        : '—';
-      const noteHtml = group.note
-        ? `<span class="cat-note">${esc(group.note)}</span>`
-        : '';
-      const perHr = mob.hours > 0.01
-        ? Math.round(group.totalCount / mob.hours)
-        : null;
+    let rowIndex = 0;
+    const tbodyHTML = entries.map((entry, ei) => {
+      if (entry.type === 'category') {
+        const { name, items, totalCount, ci, note } = entry;
+        const catSlug    = `cat-${ei}-${mob.name.replace(/\W/g, '')}`;
+        const totalLabel = mob.kills > 0
+          ? `<span class="cat-total-rate">${pct(ci.mid)}</span> total`
+          : '—';
+        const noteHtml = note
+          ? `<span class="cat-note">${esc(note)}</span>`
+          : '';
+        const perHr = mob.hours > 0.01 ? Math.round(totalCount / mob.hours) : null;
 
-      const headerRow = `
-        <tr class="cat-header" data-slug="${catSlug}">
-          <td>
-            <span class="cat-chevron">▶</span>
-            ${esc(group.name)}
-            <span style="color:var(--muted);font-weight:normal;margin-left:6px;font-size:10px;">(${group.items.length} item${group.items.length !== 1 ? 's' : ''})</span>
-            ${noteHtml}
-          </td>
-          <td>${group.totalCount}</td>
-          <td>${totalLabel}</td>
-          <td>${renderCI(group.ci)}</td>
-          <td>${perHr ?? '—'}</td>
-        </tr>`;
+        const headerRow = `
+          <tr class="cat-header" data-slug="${catSlug}">
+            <td>
+              <span class="cat-chevron">▶</span>
+              ${esc(name)}
+              <span style="color:var(--muted);font-weight:normal;margin-left:6px;font-size:10px;">(${items.length} item${items.length !== 1 ? 's' : ''})</span>
+              ${noteHtml}
+            </td>
+            <td>${totalCount}</td>
+            <td>${totalLabel}</td>
+            <td>${renderCI(ci)}</td>
+            <td>${perHr ?? '—'}</td>
+          </tr>`;
 
-      const itemRows = group.items.map(row => {
+        const itemRows = items.map(row => {
+          const bg = rowIndex++ % 2 === 0 ? 'var(--row-even)' : 'var(--row-odd)';
+          const ph = mob.hours > 0.01 ? Math.round(row.count / mob.hours) : null;
+          return `<tr class="cat-item ${catSlug}" style="display:none;background:${bg};">
+            <td>${esc(row.name)}</td>
+            <td>${row.count}</td>
+            <td class="rate">${pct(row.ci.mid)}</td>
+            <td>${renderCI(row.ci)}</td>
+            <td>${ph ?? '—'}</td>
+          </tr>`;
+        }).join('');
+
+        return headerRow + itemRows;
+      } else {
+        // Plain uncategorized item row, sorted inline with categories
+        const { row } = entry;
         const bg = rowIndex++ % 2 === 0 ? 'var(--row-even)' : 'var(--row-odd)';
         const ph = mob.hours > 0.01 ? Math.round(row.count / mob.hours) : null;
-        return `<tr class="cat-item ${catSlug}" style="display:none;background:${bg};">
-          <td>${esc(row.name)}</td>
+        return `<tr style="background:${bg};">
+          <td style="color:var(--text);">${esc(row.name)}</td>
           <td>${row.count}</td>
           <td class="rate">${pct(row.ci.mid)}</td>
           <td>${renderCI(row.ci)}</td>
           <td>${ph ?? '—'}</td>
         </tr>`;
-      }).join('');
-
-      return headerRow + itemRows;
+      }
     }).join('');
+
+    const goldSection = mob.gold > 0 ? `
+      <div class="gold-row">
+        <span>💰 Total gold: <span class="gval">${mob.gold.toLocaleString()}</span></span>
+        ${mob.goldPerKill ? `<span>Per kill: <span class="gval">${mob.goldPerKill}</span></span>` : ''}
+        ${mob.goldPerHour ? `<span>Per hour: <span class="gval">${Math.round(mob.goldPerHour).toLocaleString()}</span></span>` : ''}
+      </div>` : '';
+
+    const hrs = mob.durationSec > 0
+      ? `${Math.floor(mob.durationSec / 3600)}h ${Math.floor((mob.durationSec % 3600) / 60)}m`
+      : '—';
+
+    return `
+      <div class="mob-card" data-mob="${esc(mob.name)}">
+        <div class="mob-header">
+          <div class="grade-badge" style="background:${grade.color}22;color:${grade.color};border:1px solid ${grade.color}44;">${grade.grade}</div>
+          <div class="mob-name">${esc(mob.name)}</div>
+          <div class="mob-stats">
+            <span>☠️ <span class="val">${killsK}</span> kills</span>
+            <span>📋 <span class="val">${mob.sessions}</span> sessions</span>
+            <span>📦 <span class="val">${mob.itemRows.length}</span> drops</span>
+            <span>⏱ <span class="val">${hrs}</span></span>
+          </div>
+          <span class="chevron">▶</span>
+        </div>
+        <div class="mob-detail">
+          ${entries.length > 0 ? `
+          <table>
+            <thead>
+              <tr>
+                <th style="text-align:left;">Item / Category</th>
+                <th>Count</th>
+                <th>Drop rate</th>
+                <th>95% CI</th>
+                <th>Per hour</th>
+              </tr>
+            </thead>
+            <tbody>${tbodyHTML}</tbody>
+          </table>` : `<div style="padding:16px;color:var(--muted);text-align:center;font-size:12px;">No drop data recorded yet.</div>`}
+          ${goldSection}
+          <div class="sessions-note">
+            Based on <strong>${mob.sessions}</strong> session${mob.sessions !== 1 ? 's' : ''} ·
+            <strong>${mob.kills}</strong> total kills ·
+            95% Wilson confidence intervals ·
+            Rates may be slightly inflated due to undetected out-of-range kills ·
+            Click a category row to expand individual items
+          </div>
+        </div>
+      </div>`;
 
     const goldSection = mob.gold > 0 ? `
       <div class="gold-row">
@@ -884,14 +907,12 @@
   }
 
   function attachCardListeners() {
-    // Mob card expand/collapse
     document.querySelectorAll('.mob-card').forEach(card => {
       card.querySelector('.mob-header').addEventListener('click', () => {
         card.classList.toggle('open');
       });
     });
 
-    // Category row expand/collapse
     document.querySelectorAll('.cat-header').forEach(header => {
       header.addEventListener('click', () => {
         const slug  = header.dataset.slug;
