@@ -767,55 +767,6 @@
           <span class="chevron">▶</span>
         </div>
         <div class="mob-detail">
-          ${entries.length > 0 ? `
-          <table>
-            <thead>
-              <tr>
-                <th style="text-align:left;">Item / Category</th>
-                <th>Count</th>
-                <th>Drop rate</th>
-                <th>95% CI</th>
-                <th>Per hour</th>
-              </tr>
-            </thead>
-            <tbody>${tbodyHTML}</tbody>
-          </table>` : `<div style="padding:16px;color:var(--muted);text-align:center;font-size:12px;">No drop data recorded yet.</div>`}
-          ${goldSection}
-          <div class="sessions-note">
-            Based on <strong>${mob.sessions}</strong> session${mob.sessions !== 1 ? 's' : ''} ·
-            <strong>${mob.kills}</strong> total kills ·
-            95% Wilson confidence intervals ·
-            Rates may be slightly inflated due to undetected out-of-range kills ·
-            Click a category row to expand individual items
-          </div>
-        </div>
-      </div>`;
-
-    const goldSection = mob.gold > 0 ? `
-      <div class="gold-row">
-        <span>💰 Total gold: <span class="gval">${mob.gold.toLocaleString()}</span></span>
-        ${mob.goldPerKill ? `<span>Per kill: <span class="gval">${mob.goldPerKill}</span></span>` : ''}
-        ${mob.goldPerHour ? `<span>Per hour: <span class="gval">${Math.round(mob.goldPerHour).toLocaleString()}</span></span>` : ''}
-      </div>` : '';
-
-    const hrs = mob.durationSec > 0
-      ? `${Math.floor(mob.durationSec / 3600)}h ${Math.floor((mob.durationSec % 3600) / 60)}m`
-      : '—';
-
-    return `
-      <div class="mob-card" data-mob="${esc(mob.name)}">
-        <div class="mob-header">
-          <div class="grade-badge" style="background:${grade.color}22;color:${grade.color};border:1px solid ${grade.color}44;">${grade.grade}</div>
-          <div class="mob-name">${esc(mob.name)}</div>
-          <div class="mob-stats">
-            <span>☠️ <span class="val">${killsK}</span> kills</span>
-            <span>📋 <span class="val">${mob.sessions}</span> sessions</span>
-            <span>📦 <span class="val">${mob.itemRows.length}</span> drops</span>
-            <span>⏱ <span class="val">${hrs}</span></span>
-          </div>
-          <span class="chevron">▶</span>
-        </div>
-        <div class="mob-detail">
           ${groups.length > 0 ? `
           <table>
             <thead>
