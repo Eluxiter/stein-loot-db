@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Stein Loot Database</title>
   <style>
+    /* ── Reset & base ─────────────────────────────────────── */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
@@ -37,6 +38,7 @@
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
 
+    /* ── Layout ───────────────────────────────────────────── */
     .site-header {
       background: var(--header);
       padding: 18px 32px;
@@ -69,6 +71,7 @@
       padding: 24px 20px;
     }
 
+    /* ── Search + filter bar ──────────────────────────────── */
     .toolbar {
       display: flex;
       gap: 10px;
@@ -112,6 +115,7 @@
       cursor: pointer;
     }
 
+    /* ── Status messages ──────────────────────────────────── */
     #status {
       text-align: center;
       padding: 40px;
@@ -121,6 +125,7 @@
 
     #status.error { color: var(--accent); }
 
+    /* ── Mob cards ────────────────────────────────────────── */
     .mob-list { display: flex; flex-direction: column; gap: 10px; }
 
     .mob-card {
@@ -183,6 +188,7 @@
 
     .mob-card.open .chevron { transform: rotate(90deg); }
 
+    /* ── Drop table ───────────────────────────────────────── */
     .mob-detail {
       display: none;
       border-top: 1px solid var(--border);
@@ -226,6 +232,7 @@
     .mob-detail td:first-child { text-align: left; color: var(--text); }
     .mob-detail td.rate        { color: var(--text); font-weight: bold; }
 
+    /* Gold row at bottom of detail */
     .gold-row {
       padding: 8px 14px;
       font-size: 12px;
@@ -237,6 +244,7 @@
 
     .gold-row .gval { color: var(--gold); }
 
+    /* Sessions footnote */
     .sessions-note {
       padding: 8px 14px;
       font-size: 10px;
@@ -245,6 +253,7 @@
       line-height: 1.5;
     }
 
+    /* ── Grade explanation ────────────────────────────────── */
     .grade-legend {
       margin-top: 32px;
       padding: 16px;
@@ -270,6 +279,7 @@
 
     .grade-legend .g { font-weight: bold; font-size: 14px; width: 16px; }
 
+    /* ── Empty / no results ───────────────────────────────── */
     .no-results {
       text-align: center;
       padding: 40px;
@@ -277,10 +287,12 @@
       font-size: 13px;
     }
 
+    /* ── Scrollbar ────────────────────────────────────────── */
     ::-webkit-scrollbar { width: 6px; }
     ::-webkit-scrollbar-track { background: var(--bg); }
     ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
 
+    /* ── Category rows ────────────────────────────────────── */
     .cat-header td {
       background: var(--header) !important;
       color: var(--text) !important;
@@ -331,11 +343,16 @@
 </head>
 <body>
 
+<!-- ── Config ─────────────────────────────────────────────────────────── -->
 <script>
+  // ╔═══════════════════════════════════════════════╗
+  // ║  PASTE YOUR SUPABASE DETAILS HERE             ║
+  // ╚═══════════════════════════════════════════════╝
   const SUPABASE_URL = 'https://kejfsqinqvmvlehqvkyw.supabase.co'; // ← YOUR PROJECT URL
   const SUPABASE_KEY = 'sb_publishable_Cy-P7SGKaBP6EkixHehq8g_f5BBHWzC';
 </script>
 
+<!-- ── Header ─────────────────────────────────────────────────────────── -->
 <header class="site-header">
   <span style="font-size:22px;">⚔️</span>
   <h1>Stein Loot Database</h1>
@@ -345,6 +362,7 @@
   </div>
 </header>
 
+<!-- ── Main ───────────────────────────────────────────────────────────── -->
 <main class="container">
 
   <div class="toolbar">
@@ -356,7 +374,7 @@
       <option value="name">Mob name</option>
       <option value="grade">Confidence</option>
     </select>
-    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap;user-select:none;" title="Factor in average sell value of uncommon (124.7g) and rare (129.06g) item drops">
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);cursor:pointer;white-space:nowrap;user-select:none;margin-left:auto;" title="Factor in average sell value of uncommon (124.7g) and rare (129.06g) item drops">
       <input type="checkbox" id="item-gold-toggle" style="accent-color:var(--gold);cursor:pointer;">
       💰 Include item sell value
     </label>
@@ -384,9 +402,12 @@
 
 </main>
 
+<!-- ── Logic ───────────────────────────────────────────────────────────── -->
 <script>
 (function () {
   'use strict';
+
+  // ── Supabase fetch helpers ─────────────────────────────────────────────
 
   async function sbFetch(path) {
     const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
@@ -399,6 +420,12 @@
     return res.json();
   }
 
+  // ── Statistics ─────────────────────────────────────────────────────────
+
+  /**
+   * Wilson score confidence interval for a proportion.
+   * Returns { low, mid, high, margin } all in [0,1].
+   */
   function wilsonCI(successes, total, z = 1.96) {
     if (total === 0) return { low: 0, mid: 0, high: 0, margin: 1 };
     const p   = successes / total;
@@ -425,10 +452,18 @@
   function pct(n) { return (n * 100).toFixed(2) + '%'; }
   function pct1(n) { return (n * 100).toFixed(1) + '%'; }
 
+  // ── Item sell values ───────────────────────────────────────────────────
+  // Average gold earned from selling one item of each rarity.
+  // Update these once you have exact per-item figures.
   const SELL_VALUES = {
     'Uncommon Items': 124.70,
     'Rare Items':     129.06,
   };
+
+  // ── Item categories ────────────────────────────────────────────────────
+  // Order matters — categories appear in this order in the drop table.
+  // Items not listed here appear in an "Uncategorized" section at the end.
+  // Books are matched by prefix ('Book:') rather than being listed individually.
 
   const CATEGORY_ORDER = [
     'Trash',
@@ -441,6 +476,7 @@
     'Books',
   ];
 
+  // Optional per-category footnote shown in the header row
   const CATEGORY_NOTES = {
     'Common Items': '* duplicate names inflate totals',
   };
@@ -517,21 +553,31 @@
       'Foreguard Headpiece','Foreguard Chestplate','Foreguard Pants',
       'Foreguard Shoulders','Foreguard Gloves','Foreguard Boots',
     ],
+    // Books matched by prefix below — no need to list them all here
     'Books': [],
   };
 
+  // Build reverse lookup: lowercase item name → category name (O(1) per item)
   const ITEM_TO_CATEGORY = {};
   for (const [cat, items] of Object.entries(ITEM_CATEGORIES)) {
     for (const item of items) ITEM_TO_CATEGORY[item.toLowerCase()] = cat;
   }
 
   function getCategory(itemName) {
+    // Case-insensitive explicit lookup first
     const explicit = ITEM_TO_CATEGORY[itemName.toLowerCase()];
     if (explicit) return explicit;
+    // Books prefix — but only if it looks like "Book: Name", not "X Book of Y"
     if (/^book:/i.test(itemName)) return 'Books';
     return null; // uncategorized
   }
 
+  /**
+   * Produce a flat list of display entries sorted by count descending.
+   * Each entry is either:
+   *   { type: 'category', name, items, totalCount, ci, note, sortKey }
+   *   { type: 'item',     row,  sortKey }   ← uncategorized items appear inline
+   */
   function buildDisplayEntries(itemRows, kills) {
     const buckets = {};
     const uncategorized = [];
@@ -548,6 +594,7 @@
 
     const entries = [];
 
+    // Category entries
     for (const cat of CATEGORY_ORDER) {
       if (!buckets[cat] || buckets[cat].length === 0) continue;
       const items      = buckets[cat].slice().sort((a, b) => b.count - a.count);
@@ -563,16 +610,19 @@
       });
     }
 
+    // Uncategorized items appear as individual rows
     for (const row of uncategorized) {
       entries.push({ type: 'item', row, sortKey: row.count });
     }
 
+    // Sort everything together by count descending
     entries.sort((a, b) => b.sortKey - a.sortKey);
 
     return entries;
   }
 
   function aggregate(sessions, drops) {
+    // Build session lookup and mob buckets
     const sessionMap = {};
     const mobs       = {};
 
@@ -585,7 +635,7 @@
           gold:     0,
           durationSec: 0,
           sessions: 0,
-          items:    {}
+          items:    {},   // { itemName: totalDropCount }
         };
       }
       const m = mobs[s.mob_name];
@@ -595,6 +645,7 @@
       m.sessions++;
     }
 
+    // Attach drops
     for (const d of drops) {
       const s = sessionMap[d.session_id];
       if (!s) continue;
@@ -603,9 +654,11 @@
       m.items[d.item_name] = (m.items[d.item_name] || 0) + d.count;
     }
 
+    // Compute per-mob statistics
     return Object.values(mobs).map(m => {
       const hours = m.durationSec / 3600;
 
+      // Build item rows with Wilson CI
       const itemRows = Object.entries(m.items)
         .map(([name, count]) => {
           const ci = wilsonCI(count, m.kills);
@@ -613,10 +666,12 @@
         })
         .sort((a, b) => b.count - a.count);
 
+      // Worst-case margin = the rarest item's margin (usually highest uncertainty)
       const worstMargin = itemRows.length > 0
         ? Math.max(...itemRows.map(r => r.ci.margin))
         : 1;
 
+      // Compute expected sell gold per hour from uncommon/rare drops
       const itemGoldPerHour = (() => {
         if (hours < 0.01) return null;
         let total = 0;
@@ -642,7 +697,10 @@
     });
   }
 
+  // ── Rendering ──────────────────────────────────────────────────────────
+
   function renderCI(ci) {
+    // Show range as text: "2.1% – 3.4%" — more readable than a bar at small scales
     if (ci.margin >= 1) return `<span style="color:var(--muted);">—</span>`;
     const lo = (ci.low  * 100).toFixed(1);
     const hi = (ci.high * 100).toFixed(1);
@@ -696,6 +754,7 @@
 
         return headerRow + itemRows;
       } else {
+        // Plain uncategorized item row, sorted inline with categories
         const { row } = entry;
         const bg = rowIndex++ % 2 === 0 ? 'var(--row-even)' : 'var(--row-odd)';
         const ph = mob.hours > 0.01 ? Math.round(row.count / mob.hours) : null;
@@ -775,6 +834,8 @@
       .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  // ── Sort + filter ──────────────────────────────────────────────────────
+
   let allMobs = [];
   const searchEl = document.getElementById('search');
   const sortEl   = document.getElementById('sort-select');
@@ -810,6 +871,8 @@
       list.innerHTML = visible.map(renderMobCard).join('');
       attachCardListeners();
 
+      // If searching for an item, auto-open the mob card and expand the
+      // category that contains a matching item
       if (query) {
         document.querySelectorAll('.mob-card').forEach(card => {
           card.classList.add('open');
@@ -850,7 +913,11 @@
   searchEl.addEventListener('input',  applyFilterSort);
   sortEl.addEventListener('change',   applyFilterSort);
   document.getElementById('item-gold-toggle').addEventListener('change', applyFilterSort);
-  
+
+  // ── Admin mode ─────────────────────────────────────────────────────────
+
+  // ── Bootstrap ─────────────────────────────────────────────────────────
+
   async function load() {
     const statusEl = document.getElementById('status');
     const listEl   = document.getElementById('mob-list');
@@ -864,6 +931,7 @@
 
       allMobs = aggregate(sessions, drops);
 
+      // Header meta
       const totalKills    = allMobs.reduce((s, m) => s + m.kills, 0);
       const totalSessions = allMobs.reduce((s, m) => s + m.sessions, 0);
       const newest = sessions.reduce((a, b) =>
